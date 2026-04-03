@@ -28,7 +28,6 @@ import (
 
 	migration "github.com/armosec/postgres-connector/migration"
 	postgresRouter "github.com/armosec/postgres-connector/router"
-	"github.com/cenkalti/backoff/v4"
 
 	"github.com/kubescape/storage/pkg/apis/softwarecomposition/v1beta1"
 	"github.com/kubescape/synchronizer/adapters"
@@ -658,18 +657,9 @@ func initIntegrationTest(t *testing.T) *Test {
 	pgRouter, pgRouterConfig := postgresRouter.NewSinglePostgresRouter(rdsCredentials)
 	pgRouter.SetConnector("default", ingesterPgClient)
 	ingesterConf.PostgresRouterConfig = pgRouterConfig
-	// run migrations with retry to handle transient GitHub API rate limiting
-	// (17 parallel test jobs can hit the rate limit when all fetch migrations simultaneously)
-	jitter := time.Duration(rand.Intn(10000)) * time.Millisecond
-	time.Sleep(jitter)
-	migrationBackoff := backoff.NewExponentialBackOff()
-	migrationBackoff.InitialInterval = 30 * time.Second
-	migrationBackoff.MaxInterval = 5 * time.Minute
-	migrationBackoff.MaxElapsedTime = 35 * time.Minute
-	err = backoff.Retry(func() error {
-		return migration.DbMigrations(ingesterPgClient.GetClient(), migration.HotMigrationsTargetDbVersion)
-	}, migrationBackoff)
-	if err != nil {
+	// run migrations - in CI, LOCAL_FILE_MIGRATION_PATH is set to a local clone of db-migrations,
+	// avoiding GitHub API rate limiting when 17 parallel test jobs run simultaneously.
+	if err = migration.DbMigrations(ingesterPgClient.GetClient(), migration.HotMigrationsTargetDbVersion); err != nil {
 		panic(fmt.Sprintf("failed to run migrations: %v", err))
 	}
 	pulsarClient, err := pulsarconnector.NewClient(

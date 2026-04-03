@@ -63,6 +63,11 @@ jobs:
       - name: Print Go version
         run: go version
 
+      - name: Checkout db-migrations
+        run: |
+          git clone --depth=1 https://${{ secrets.DB_MIGRATIONS_GH_USER }}:${{ secrets.DB_MIGRATIONS_GH_TOKEN }}@github.com/armosec/db-migrations.git /tmp/db-migrations
+          echo "LOCAL_FILE_MIGRATION_PATH=/tmp/db-migrations/postgres/hot_migrations" >> $GITHUB_ENV
+
       - name: Run test
         run: |
           echo "machine github.com login git password ${{ secrets.INGESTERS_READ_TOKEN }}" > ~/.netrc
