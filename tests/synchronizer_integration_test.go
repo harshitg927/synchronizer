@@ -21,6 +21,7 @@ import (
 	"github.com/apache/pulsar-client-go/pulsar"
 	configserviceconnector "github.com/armosec/event-ingester-service/config_service_connector"
 	"github.com/armosec/event-ingester-service/ingesters"
+	ingesterinterfaces "github.com/armosec/event-ingester-service/ingesters/interfaces"
 	ingesterutils "github.com/armosec/event-ingester-service/utils"
 	postgresConnector "github.com/armosec/postgres-connector"
 	postgresconnectordal "github.com/armosec/postgres-connector/dal"
@@ -605,6 +606,10 @@ func (s *csMock) GetOrCreateCluster(_, _ string, _ map[string]string) (*armotype
 	return &armotypes.PortalCluster{}, nil
 }
 
+func (s *csMock) SetSIEMProducer(_ ingesterinterfaces.ISIEMProducer) {
+	// No-op for mock - the producer is not used in tests
+}
+
 func initIntegrationTest(t *testing.T) *Test {
 	ctx := context.TODO()
 
@@ -1177,6 +1182,7 @@ func TestSynchronizer_TC09(t *testing.T) {
 	time.Sleep(10 * time.Second)
 	// restart pulsar
 	err = td.containers["pulsar"].Start(td.ctx)
+
 	require.NoError(t, err)
 	time.Sleep(10 * time.Second)
 	// check object in postgres
