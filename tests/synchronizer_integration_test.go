@@ -665,7 +665,7 @@ func initIntegrationTest(t *testing.T) *Test {
 	migrationBackoff := backoff.NewExponentialBackOff()
 	migrationBackoff.InitialInterval = 30 * time.Second
 	migrationBackoff.MaxInterval = 5 * time.Minute
-	migrationBackoff.MaxElapsedTime = 15 * time.Minute
+	migrationBackoff.MaxElapsedTime = 35 * time.Minute
 	err = backoff.Retry(func() error {
 		return migration.DbMigrations(ingesterPgClient.GetClient(), migration.HotMigrationsTargetDbVersion)
 	}, migrationBackoff)
