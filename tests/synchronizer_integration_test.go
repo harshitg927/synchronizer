@@ -28,6 +28,7 @@ import (
 
 	migration "github.com/armosec/postgres-connector/migration"
 	postgresRouter "github.com/armosec/postgres-connector/router"
+	"github.com/cenkalti/backoff/v4"
 
 	"github.com/kubescape/storage/pkg/apis/softwarecomposition/v1beta1"
 	"github.com/kubescape/synchronizer/adapters"
