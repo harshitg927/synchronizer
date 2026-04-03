@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -112,6 +113,18 @@ func (c *PulsarMessageReader) readerLoop(ctx context.Context) {
 	for {
 		msg, err := c.reader.Next(ctx)
 		if err != nil {
+			// If the context was cancelled or the consumer was closed during shutdown,
+			// return gracefully instead of calling Fatal (which would call os.Exit(1))
+			select {
+			case <-ctx.Done():
+				logger.L().Ctx(ctx).Info("pulsar reader loop exiting due to context cancellation")
+				return
+			default:
+			}
+			if strings.Contains(err.Error(), "ConsumerClosed") || strings.Contains(err.Error(), "consumer closed") {
+				logger.L().Ctx(ctx).Info("pulsar reader loop exiting due to consumer close")
+				return
+			}
 			logger.L().Ctx(ctx).Fatal("failed to read message from pulsar", helpers.Error(err))
 		}
 

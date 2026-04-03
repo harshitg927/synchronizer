@@ -734,6 +734,18 @@ func initIntegrationTest(t *testing.T) *Test {
 }
 
 func tearDown(td *Test) {
+	// Cancel all server and client contexts first to allow goroutines to shut down gracefully
+	// before closing the pulsar client. Without this, the pulsar reader goroutine would call
+	// Fatal (os.Exit) when it receives a "consumer closed" error during teardown.
+	for i := range td.syncServers {
+		td.syncServers[i].syncServerContextCancelFn()
+	}
+	for i := range td.clusters {
+		if td.clusters[i].syncClientContextCancelFn != nil {
+			td.clusters[i].syncClientContextCancelFn()
+		}
+	}
+	time.Sleep(100 * time.Millisecond) // allow goroutines to detect context cancellation
 	td.pulsarClient.Close()
 	for _, c := range td.containers {
 		_ = c.Terminate(td.ctx)
