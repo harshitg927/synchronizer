@@ -224,9 +224,19 @@ func (a *Adapter) Start(ctx context.Context) error {
 		}
 		a.supportedPaths[lowerCaseStrategy][resource.Group][resource.Version][resource.Resource] = true
 	}
+	// Pre-bind the listener so we can return an error immediately if the port is unavailable.
+	ln, err := net.Listen("tcp", a.httpServer.Addr)
+	if err != nil {
+		return fmt.Errorf("httpendpoint failed to listen on %s: %w", a.httpServer.Addr, err)
+	}
 	go func() {
-		if err := a.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.L().Ctx(ctx).Fatal("httpendpoint server error", helpers.Error(err))
+		if err := a.httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
+			select {
+			case <-ctx.Done():
+				logger.L().Ctx(ctx).Info("httpendpoint server stopped due to context cancellation", helpers.Error(err))
+			default:
+				logger.L().Ctx(ctx).Error("httpendpoint server error", helpers.Error(err))
+			}
 		}
 		logger.L().Ctx(ctx).Info("httpendpoint server stopped")
 	}()
