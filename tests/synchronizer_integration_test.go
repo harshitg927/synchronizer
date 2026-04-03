@@ -1213,7 +1213,7 @@ func TestSynchronizer_TC09(t *testing.T) {
 		logger.L().Info("waiting for pulsar to restart", helpers.Error(err), helpers.String("retry in", d.String()))
 	})
 	require.NoError(t, err, "pulsar did not become ready after restart")
-	time.Sleep(10 * time.Second) // allow Pulsar clients to reconnect and reprocess the pending message
+	time.Sleep(30 * time.Second) // allow Pulsar clients to reconnect and reprocess the pending message
 	// check object in postgres
 	_, objFound, err := td.processor.GetObjectFromPostgres(td.clusters[0].account, td.clusters[0].cluster, "spdx.softwarecomposition.kubescape.io/v1beta1/applicationprofiles", namespace, name)
 	assert.NoError(t, err)
