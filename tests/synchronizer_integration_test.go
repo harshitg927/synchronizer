@@ -1209,7 +1209,7 @@ func TestSynchronizer_TC09(t *testing.T) {
 			return fmt.Errorf("pulsar not ready yet, response: %s", string(body))
 		}
 		return nil
-	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 40), func(err error, d time.Duration) {
+	}, backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 60), func(err error, d time.Duration) {
 		logger.L().Info("waiting for pulsar to restart", helpers.Error(err), helpers.String("retry in", d.String()))
 	})
 	require.NoError(t, err, "pulsar did not become ready after restart")

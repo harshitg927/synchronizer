@@ -20,7 +20,6 @@ import (
 	"github.com/kubescape/synchronizer/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/multierr"
-	"k8s.io/utils/ptr"
 )
 
 const (
@@ -343,11 +342,10 @@ func NewPulsarMessageProducer(cfg config.Config, pulsarClient pulsarconnector.Cl
 	fullTopic := pulsarconnector.BuildPersistentTopic(pulsarClient.GetConfig().Tenant, pulsarClient.GetConfig().Namespace, topic)
 
 	options := pulsar.ProducerOptions{
-		DisableBatching:      true,
-		EnableChunking:       true,
-		CompressionType:      pulsar.ZSTD,
-		CompressionLevel:     1,
-		MaxReconnectToBroker: ptr.To(uint(5)),
+		DisableBatching:  true,
+		EnableChunking:   true,
+		CompressionType:  pulsar.ZSTD,
+		CompressionLevel: 1,
 		Properties: map[string]string{
 			"podName": os.Getenv("HOSTNAME"),
 		},
