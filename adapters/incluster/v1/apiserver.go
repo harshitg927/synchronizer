@@ -13,17 +13,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func GetApiServerGitVersionAndCloudProvider(ctx context.Context) (string, string) {
-	k8sAPiObj := k8sinterface.NewKubernetesApi()
+func GetApiServerGitVersionAndCloudProvider(ctx context.Context, k8sApi *k8sinterface.KubernetesApi) (string, string) {
+	if k8sApi == nil {
+		logger.L().Warning("no kubernetes client for api server info")
+		return "", ""
+	}
 
-	cloudProvider, err := getCloudProvider(ctx, k8sAPiObj)
+	cloudProvider, err := getCloudProvider(ctx, k8sApi)
 	if err != nil {
 		logger.L().Error("failed to set cloud provider", helpers.Error(err))
 	} else {
 		logger.L().Info("cloud provider", helpers.String("cloudProvider", cloudProvider))
 	}
 
-	gitVersion, err := getApiServerGitVersion(k8sAPiObj)
+	gitVersion, err := getApiServerGitVersion(k8sApi)
 	if err != nil {
 		logger.L().Error("failed to get api server version", helpers.Error(err))
 	} else {
@@ -34,8 +37,11 @@ func GetApiServerGitVersionAndCloudProvider(ctx context.Context) (string, string
 }
 
 // GetClusterUID retrieves the UID of the kube-system namespace to use as a stable cluster identifier.
-func GetClusterUID(ctx context.Context) string {
-	k8sApi := k8sinterface.NewKubernetesApi()
+func GetClusterUID(ctx context.Context, k8sApi *k8sinterface.KubernetesApi) string {
+	if k8sApi == nil {
+		logger.L().Ctx(ctx).Warning("no kubernetes client for ClusterUID")
+		return ""
+	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	namespace, err := k8sApi.KubernetesClient.CoreV1().Namespaces().Get(ctx, "kube-system", metav1.GetOptions{})

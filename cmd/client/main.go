@@ -22,6 +22,7 @@ import (
 	"github.com/kubescape/synchronizer/core"
 	"github.com/kubescape/synchronizer/domain"
 	"github.com/kubescape/synchronizer/utils"
+	"github.com/kubescape/k8s-interface/k8sinterface"
 )
 
 func main() {
@@ -66,11 +67,13 @@ func main() {
 	updateClusterName(&cfg)
 	// init adapters
 	var adpts []adapters.Adapter
+	var k8sApi *k8sinterface.KubernetesApi
 	if err := cfg.InCluster.ValidateConfig(); err == nil {
 		dynamicClient, storageClient, err := utils.NewClient()
 		if err != nil {
 			logger.L().Fatal("unable to create k8s client", helpers.Error(err))
 		}
+		k8sApi = k8sinterface.NewKubernetesApi()
 		inClusterAdapter := incluster.NewInClusterAdapter(cfg.InCluster, dynamicClient, storageClient)
 		adpts = append(adpts, inClusterAdapter)
 	}
@@ -97,8 +100,8 @@ func main() {
 		Cluster: cfg.InCluster.ClusterName,
 	})
 
-	gitVersion, cloudProvider := incluster.GetApiServerGitVersionAndCloudProvider(ctx)
-	clusterUID := incluster.GetClusterUID(ctx)
+	gitVersion, cloudProvider := incluster.GetApiServerGitVersionAndCloudProvider(ctx, k8sApi)
+	clusterUID := incluster.GetClusterUID(ctx, k8sApi)
 
 	// authentication headers
 	version := os.Getenv("RELEASE")
