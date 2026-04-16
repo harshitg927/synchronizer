@@ -115,6 +115,7 @@ func (c *Client) sendSingleConnectedClientsMessage(ctx context.Context) error {
 				ConnectionTime:      id.ConnectionTime,
 				GitVersion:          id.GitVersion,
 				CloudProvider:       id.CloudProvider,
+				ClusterUID:          id.ClusterUID,
 			}},
 		Timestamp: time.Now(),
 		MsgId:     utils.NewMsgId(),

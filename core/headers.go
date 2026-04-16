@@ -9,4 +9,5 @@ const (
 	VersionHeader       = "X-SYNCHRONIZER-VERSION"
 	GitVersionHeader    = "X-GIT-VERSION"
 	CloudProviderHeader = "X-CLOUD-PROVIDER"
+	ClusterUIDHeader    = "X-CLUSTER-UID"
 )

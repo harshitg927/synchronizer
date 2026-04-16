@@ -165,4 +165,5 @@ type ConnectedClient struct {
 	ConnectionTime      time.Time `json:"connectionTime"`
 	GitVersion          string    `json:"gitVersion"`
 	CloudProvider       string    `json:"cloudProvider"`
+	ClusterUID          string    `json:"clusterUID"`
 }

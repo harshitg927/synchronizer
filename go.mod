@@ -4,7 +4,7 @@ go 1.25.6
 
 require (
 	github.com/apache/pulsar-client-go v0.12.1
-	github.com/armosec/armoapi-go v0.0.673
+	github.com/armosec/armoapi-go v0.0.700
 	github.com/armosec/utils-k8s-go v0.0.30
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc

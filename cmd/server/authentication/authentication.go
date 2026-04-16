@@ -39,6 +39,7 @@ func AuthenticationServerMiddleware(cfg *config.AuthenticationServerConfig, next
 		version := r.Header.Get(core.VersionHeader)
 		cloudProvider := r.Header.Get(core.CloudProviderHeader)
 		gitVersion := r.Header.Get(core.GitVersionHeader)
+		clusterUID := r.Header.Get(core.ClusterUIDHeader)
 
 		if accessKey == "" || account == "" || cluster == "" {
 			logger.L().Error("missing headers on incoming connection",
@@ -128,6 +129,7 @@ func AuthenticationServerMiddleware(cfg *config.AuthenticationServerConfig, next
 			SyncVersion:    version,
 			CloudProvider:  cloudProvider,
 			GitVersion:     gitVersion,
+			ClusterUID:     clusterUID,
 		})
 		ctx = context.WithValue(ctx, domain.ContextKeyAccessKey, accessKey)
 

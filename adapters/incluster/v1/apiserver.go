@@ -3,6 +3,7 @@ package incluster
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/kubescape/go-logger"
 	"github.com/kubescape/go-logger/helpers"
@@ -30,6 +31,21 @@ func GetApiServerGitVersionAndCloudProvider(ctx context.Context) (string, string
 	}
 
 	return gitVersion, cloudProvider
+}
+
+// GetClusterUID retrieves the UID of the kube-system namespace to use as a stable cluster identifier.
+func GetClusterUID(ctx context.Context) string {
+	k8sApi := k8sinterface.NewKubernetesApi()
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	namespace, err := k8sApi.KubernetesClient.CoreV1().Namespaces().Get(ctx, "kube-system", metav1.GetOptions{})
+	if err != nil {
+		logger.L().Ctx(ctx).Warning("failed to get kube-system namespace for ClusterUID", helpers.Error(err))
+		return ""
+	}
+	clusterUID := string(namespace.UID)
+	logger.L().Info("successfully retrieved ClusterUID", helpers.String("clusterUID", clusterUID))
+	return clusterUID
 }
 
 func getCloudProvider(ctx context.Context, k8sApi *k8sinterface.KubernetesApi) (string, error) {
