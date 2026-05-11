@@ -234,8 +234,12 @@ github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 h1:0CwZNZbxp69SHPd
 github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5/go.mod h1:wHh0iHkYZB8zMSxRWpUBQtwG5a7fFgvEO+odwuTv2gs=
 github.com/armosec/armoapi-go v0.0.700 h1:nIwm49HhNzjr33YpiQt1loTJZpVXSCay8ynbrcYgvy0=
 github.com/armosec/armoapi-go v0.0.700/go.mod h1:9jAH0g8ZsryhiBDd/aNMX4+n10bGwTx/doWCyyjSxts=
+github.com/armosec/armoapi-go v0.0.710 h1:zEBmMwHNvhPswE7R6eO/Nl83oR7n14ij2FirxRkngKE=
+github.com/armosec/armoapi-go v0.0.710/go.mod h1:9jAH0g8ZsryhiBDd/aNMX4+n10bGwTx/doWCyyjSxts=
 github.com/armosec/armosec-infra v0.0.500 h1:4l2J4RpfYajSsy9Aw0xeJrqRaFU9A/M2i6paDFtOPoU=
 github.com/armosec/armosec-infra v0.0.500/go.mod h1:ssB5+A08eOLeFxI1K3k8vIyD9QiFc4OanVJy3m9P5P4=
+github.com/armosec/armosec-infra v0.0.517 h1:Xa+qTw3gdkVhdqQ3NXbEgtaTG64A01DoS7Yn44dCuJM=
+github.com/armosec/armosec-infra v0.0.517/go.mod h1:fASQxxqf7H5py17nyrlU+RPIlBlt8iOJv3ArtvhXvzI=
 github.com/armosec/ca-test v0.0.15 h1:5xHjVL6CK3M/MRxIeLwVtUoS6CNyMZUENjr7sNQNwP0=
 github.com/armosec/ca-test v0.0.15/go.mod h1:s2zmk6nnim+EXhzo1zCrjlNsBziOP2DhWoMAnbZ8Jc4=
 github.com/armosec/cloud-account-vuln-scan v0.0.101 h1:1cytaJ9RSUJsSDzR8i+TqYK0i/l2w7rr/7ebsP58JbI=
