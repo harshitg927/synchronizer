@@ -4,8 +4,8 @@ go 1.25.8
 
 require (
 	github.com/apache/pulsar-client-go v0.16.0
-	github.com/armosec/armoapi-go v0.0.700
-	github.com/armosec/armosec-infra v0.0.500
+	github.com/armosec/armoapi-go v0.0.710
+	github.com/armosec/armosec-infra v0.0.517
 	github.com/armosec/event-ingester-service v0.1.1-0.20260403134312-b79c13606a4d
 	github.com/armosec/postgres-connector v0.0.1296
 	github.com/cenkalti/backoff/v4 v4.3.0
