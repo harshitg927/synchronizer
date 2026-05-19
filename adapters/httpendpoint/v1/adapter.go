@@ -36,11 +36,12 @@ func NewHTTPEndpointAdapter(cfg config.Config) *Adapter {
 	})
 
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%s", cfg.HTTPEndpoint.ServerPort),
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  120 * time.Second,
-		Handler:      httpMux,
+		Addr:              fmt.Sprintf(":%s", cfg.HTTPEndpoint.ServerPort),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		Handler:           httpMux,
 	}
 	a := &Adapter{
 		cfg:        cfg,
