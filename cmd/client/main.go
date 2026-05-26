@@ -15,6 +15,7 @@ import (
 	backendUtils "github.com/kubescape/backend/pkg/utils"
 	"github.com/kubescape/go-logger"
 	"github.com/kubescape/go-logger/helpers"
+	"github.com/kubescape/k8s-interface/k8sinterface"
 	"github.com/kubescape/synchronizer/adapters"
 	"github.com/kubescape/synchronizer/adapters/httpendpoint/v1"
 	"github.com/kubescape/synchronizer/adapters/incluster/v1"
@@ -22,7 +23,6 @@ import (
 	"github.com/kubescape/synchronizer/core"
 	"github.com/kubescape/synchronizer/domain"
 	"github.com/kubescape/synchronizer/utils"
-	"github.com/kubescape/k8s-interface/k8sinterface"
 )
 
 func main() {
@@ -141,6 +141,7 @@ func main() {
 				return backoff.Permanent(fmt.Errorf("server rejected our client version <%s>, please update", version))
 			}
 			if errors.As(err, &status) && status == http.StatusUnauthorized {
+				logger.L().Info("authentication failed", helpers.Error(err), helpers.String("url", cfg.InCluster.ServerUrl))
 				return backoff.Permanent(fmt.Errorf("server rejected our credentials"))
 			}
 			return err
