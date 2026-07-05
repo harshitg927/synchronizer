@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/gobwas/ws"
-	pulsarconnector "github.com/kubescape/messaging/pulsar/connector"
 	"github.com/kubescape/synchronizer/utils"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -19,6 +18,7 @@ import (
 
 	"github.com/kubescape/synchronizer/config"
 	"github.com/kubescape/synchronizer/core"
+	"github.com/kubescape/synchronizer/messaging"
 )
 
 func main() {
@@ -44,30 +44,15 @@ func main() {
 	}
 
 	var adapter adapters.Adapter
-	if cfg.Backend.PulsarConfig != nil {
-		logger.L().Info("initializing pulsar client")
-		pulsarClient, err := pulsarconnector.NewClient(
-			pulsarconnector.WithConfig(cfg.Backend.PulsarConfig),
-		)
-		if err != nil {
-			logger.L().Fatal("failed to create pulsar client", helpers.Error(err), helpers.String("config", fmt.Sprintf("%+v", cfg.Backend.PulsarConfig)))
-		}
-		defer pulsarClient.Close()
-
-		pulsarProducer, err := backend.NewPulsarMessageProducer(cfg, pulsarClient)
-		if err != nil {
-			logger.L().Fatal("failed to create pulsar producer", helpers.Error(err), helpers.String("config", fmt.Sprintf("%+v", cfg.Backend.PulsarConfig)))
-		}
-
-		pulsarReader, err := backend.NewPulsarMessageReader(cfg, pulsarClient)
-		if err != nil {
-			logger.L().Fatal("failed to create pulsar reader", helpers.Error(err), helpers.String("config", fmt.Sprintf("%+v", cfg.Backend.PulsarConfig)))
-		}
-
-		adapter = backend.NewBackendAdapter(ctx, pulsarProducer, cfg.Backend)
-		pulsarReader.Start(ctx, adapter)
+	mq, err := messaging.NewFromConfig(cfg)
+	if err != nil {
+		logger.L().Fatal("failed to initialize message queue", helpers.Error(err))
+	}
+	if mq != nil {
+		defer mq.Close()
+		adapter = backend.NewBackendAdapter(ctx, mq.Producer, cfg.Backend)
+		mq.Reader.Start(ctx, adapter)
 	} else {
-		// mock adapter
 		logger.L().Info("initializing mock adapter")
 		adapter = adapters.NewMockAdapter(false)
 	}

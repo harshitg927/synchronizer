@@ -22,6 +22,12 @@ const (
 	MsgPropResourceNamespace = "namespace"
 	// MsgPropResourceVersion is the property name for the resource version of the resource
 	MsgPropResourceVersion = "resourceVersion"
+	// MsgPropProducerSource identifies the message producer (Pulsar property / Kafka header)
+	MsgPropProducerSource = "x-producer-source"
+	// MsgPropProducerSourceSynchronizerServer is the producer source value for synchronizer server outbound messages
+	MsgPropProducerSourceSynchronizerServer = "synchronizer-server"
+	// SynchronizerServerProducerKey is the legacy Pulsar message key used for self-loop filtering
+	SynchronizerServerProducerKey = "SynchronizerServerProducer"
 
 	MsgPropEventValueGetObjectMessage                  = "GetObject"
 	MsgPropEventValuePatchObjectMessage                = "PatchObject"
