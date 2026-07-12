@@ -20,6 +20,14 @@ type MessageHandler struct {
 	reconciliationMessageMutex sync.Mutex
 }
 
+func kindFromPayload(ctx context.Context, kindStr, messageType string) (*domain.Kind, error) {
+	kind := domain.KindFromString(ctx, kindStr)
+	if kind == nil {
+		return nil, fmt.Errorf("unknown kind %q in %s message", kindStr, messageType)
+	}
+	return kind, nil
+}
+
 func (h *MessageHandler) Handle(ctx context.Context, adapter adapters.Adapter, msg IncomingMessage) error {
 	msgProperties := msg.Properties
 	clientIdentifier := domain.ClientIdentifier{
@@ -99,8 +107,12 @@ func (h *MessageHandler) Handle(ctx context.Context, adapter adapters.Adapter, m
 			Depth: data.Depth,
 			MsgId: data.MsgId,
 		})
+		kind, err := kindFromPayload(ctx, data.Kind, "GetObject")
+		if err != nil {
+			return err
+		}
 		if err := callbacks.GetObject(ctx, domain.KindName{
-			Kind:            domain.KindFromString(ctx, data.Kind),
+			Kind:            kind,
 			Name:            data.Name,
 			Namespace:       data.Namespace,
 			ResourceVersion: data.ResourceVersion,
@@ -116,8 +128,12 @@ func (h *MessageHandler) Handle(ctx context.Context, adapter adapters.Adapter, m
 			Depth: data.Depth,
 			MsgId: data.MsgId,
 		})
+		kind, err := kindFromPayload(ctx, data.Kind, "PatchObject")
+		if err != nil {
+			return err
+		}
 		if err := callbacks.PatchObject(ctx, domain.KindName{
-			Kind:            domain.KindFromString(ctx, data.Kind),
+			Kind:            kind,
 			Name:            data.Name,
 			Namespace:       data.Namespace,
 			ResourceVersion: data.ResourceVersion,
@@ -133,8 +149,12 @@ func (h *MessageHandler) Handle(ctx context.Context, adapter adapters.Adapter, m
 			Depth: data.Depth,
 			MsgId: data.MsgId,
 		})
+		kind, err := kindFromPayload(ctx, data.Kind, "VerifyObject")
+		if err != nil {
+			return err
+		}
 		if err := callbacks.VerifyObject(ctx, domain.KindName{
-			Kind:            domain.KindFromString(ctx, data.Kind),
+			Kind:            kind,
 			Name:            data.Name,
 			Namespace:       data.Namespace,
 			ResourceVersion: data.ResourceVersion,
@@ -150,8 +170,12 @@ func (h *MessageHandler) Handle(ctx context.Context, adapter adapters.Adapter, m
 			Depth: data.Depth,
 			MsgId: data.MsgId,
 		})
+		kind, err := kindFromPayload(ctx, data.Kind, "PutObject")
+		if err != nil {
+			return err
+		}
 		if err := callbacks.PutObject(ctx, domain.KindName{
-			Kind:            domain.KindFromString(ctx, data.Kind),
+			Kind:            kind,
 			Name:            data.Name,
 			Namespace:       data.Namespace,
 			ResourceVersion: data.ResourceVersion,
@@ -167,8 +191,12 @@ func (h *MessageHandler) Handle(ctx context.Context, adapter adapters.Adapter, m
 			Depth: data.Depth,
 			MsgId: data.MsgId,
 		})
+		kind, err := kindFromPayload(ctx, data.Kind, "DeleteObject")
+		if err != nil {
+			return err
+		}
 		if err := callbacks.DeleteObject(ctx, domain.KindName{
-			Kind:            domain.KindFromString(ctx, data.Kind),
+			Kind:            kind,
 			Name:            data.Name,
 			Namespace:       data.Namespace,
 			ResourceVersion: data.ResourceVersion,

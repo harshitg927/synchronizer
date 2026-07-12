@@ -164,6 +164,115 @@ func TestMessageHandler_DispatchesMessages(t *testing.T) {
 	}
 }
 
+func TestMessageHandler_RejectsInvalidKind(t *testing.T) {
+	const objectName = "test"
+	const invalidKind = "invalid"
+
+	tests := []struct {
+		name      string
+		eventType string
+		payload   any
+		callbacks domain.Callbacks
+	}{
+		{
+			name:      "GetObject",
+			eventType: MsgPropEventValueGetObjectMessage,
+			payload: GetObjectMessage{
+				Kind:  invalidKind,
+				Name:  objectName,
+				Depth: 1,
+			},
+			callbacks: domain.Callbacks{
+				GetObject: func(_ context.Context, _ domain.KindName, _ []byte) error {
+					t.Fatal("GetObject callback should not be called for invalid kind")
+					return nil
+				},
+			},
+		},
+		{
+			name:      "PatchObject",
+			eventType: MsgPropEventValuePatchObjectMessage,
+			payload: PatchObjectMessage{
+				Kind:  invalidKind,
+				Name:  objectName,
+				Depth: 1,
+			},
+			callbacks: domain.Callbacks{
+				PatchObject: func(_ context.Context, _ domain.KindName, _ string, _ []byte) error {
+					t.Fatal("PatchObject callback should not be called for invalid kind")
+					return nil
+				},
+			},
+		},
+		{
+			name:      "VerifyObject",
+			eventType: MsgPropEventValueVerifyObjectMessage,
+			payload: VerifyObjectMessage{
+				Kind:  invalidKind,
+				Name:  objectName,
+				Depth: 1,
+			},
+			callbacks: domain.Callbacks{
+				VerifyObject: func(_ context.Context, _ domain.KindName, _ string) error {
+					t.Fatal("VerifyObject callback should not be called for invalid kind")
+					return nil
+				},
+			},
+		},
+		{
+			name:      "PutObject",
+			eventType: MsgPropEventValuePutObjectMessage,
+			payload: PutObjectMessage{
+				Kind:  invalidKind,
+				Name:  objectName,
+				Depth: 1,
+			},
+			callbacks: domain.Callbacks{
+				PutObject: func(_ context.Context, _ domain.KindName, _ string, _ []byte) error {
+					t.Fatal("PutObject callback should not be called for invalid kind")
+					return nil
+				},
+			},
+		},
+		{
+			name:      "DeleteObject",
+			eventType: MsgPropEventValueDeleteObjectMessage,
+			payload: DeleteObjectMessage{
+				Kind:  invalidKind,
+				Name:  objectName,
+				Depth: 1,
+			},
+			callbacks: domain.Callbacks{
+				DeleteObject: func(_ context.Context, _ domain.KindName) error {
+					t.Fatal("DeleteObject callback should not be called for invalid kind")
+					return nil
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter := newHandlerTestAdapter(tt.callbacks)
+			payload, err := json.Marshal(tt.payload)
+			require.NoError(t, err)
+
+			handler := &MessageHandler{Name: "test-reader"}
+			err = handler.Handle(context.Background(), adapter, IncomingMessage{
+				ID: "msg-1",
+				Properties: map[string]string{
+					MsgPropAccount: "account",
+					MsgPropCluster: "cluster",
+					MsgPropEvent:   tt.eventType,
+				},
+				Payload: payload,
+			})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "unknown kind")
+		})
+	}
+}
+
 func TestMessageHandler_UnknownMessageType(t *testing.T) {
 	adapter := newHandlerTestAdapter(domain.Callbacks{})
 	handler := &MessageHandler{Name: "test-reader"}
