@@ -232,9 +232,19 @@ func logPulsarSyncAsyncErrors(msgID pulsar.MessageID, message *pulsar.ProducerMe
 // own key. Keeping this parameter preserves the public signature that external
 // consumers of adapters/backend/v1 depend on.
 func NewProducerMessage(producerMessageKey, account, cluster, eventType string, payload []byte, optionalProperties ...map[string]string) *pulsar.ProducerMessage {
+	properties := messaging.BuildProducerProperties(account, cluster, eventType, optionalProperties...)
+	// BuildProducerProperties always stamps the self-produced source header, which
+	// the server's read loop uses to skip its own messages (IsSelfProducedMessage).
+	// Only the synchronizer server (identified by its producer key) may claim that
+	// source; external producers such as event-ingester-service supply their own
+	// key and must NOT be tagged self-produced, or the server would silently drop
+	// their backend->cluster messages.
+	if producerMessageKey != messaging.SynchronizerServerProducerKey {
+		delete(properties, messaging.MsgPropProducerSource)
+	}
 	return &pulsar.ProducerMessage{
 		Payload:    payload,
-		Properties: messaging.BuildProducerProperties(account, cluster, eventType, optionalProperties...),
+		Properties: properties,
 		Key:        producerMessageKey,
 	}
 }
