@@ -20,6 +20,39 @@ var (
 	once   sync.Once // used to initialize authHttpClient
 )
 
+// armoAccessKeyLength is the length of a valid ARMO access key, which is a UUID.
+const armoAccessKeyLength = 36
+
+// helmPlaceholderAccounts are literal values shipped in the Helm chart / install
+// docs that a customer is expected to replace with their real ARMO account UUID.
+// Seeing one of these as the account means the chart was installed without
+// substituting the values (e.g. `REPLACE_ME_WITH_ARMO_ACCOUNT_UUID`, or a bare
+// `test`), so the connection can never authenticate no matter how many times it
+// retries.
+var helmPlaceholderAccounts = map[string]bool{
+	"REPLACE_ME_WITH_ARMO_ACCOUNT_UUID": true,
+	"test":                              true,
+	"":                                  true,
+}
+
+// unconfiguredCredentialsReason returns a human-readable reason when the presented
+// account/accessKey look like unsubstituted Helm placeholders rather than real
+// (possibly bad or revoked) credentials. It returns an empty string when the
+// credentials look plausibly real, so a genuine auth failure stays distinguishable
+// from a never-configured install. It never returns or logs the raw access key.
+func unconfiguredCredentialsReason(account, accessKey string) string {
+	if helmPlaceholderAccounts[account] {
+		return "account is a known Helm placeholder — customer likely did not substitute Helm values"
+	}
+	if _, err := uuid.Parse(account); err != nil {
+		return "account is not a valid UUID — customer likely did not substitute Helm values"
+	}
+	if len(accessKey) != armoAccessKeyLength {
+		return "accessKey length is not 36 (not a valid ARMO access key) — customer likely did not substitute Helm values"
+	}
+	return ""
+}
+
 func AuthenticationServerMiddleware(cfg *config.AuthenticationServerConfig, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		once.Do(func() {
@@ -102,12 +135,20 @@ func AuthenticationServerMiddleware(cfg *config.AuthenticationServerConfig, next
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			} else if response.StatusCode != http.StatusOK {
-				logger.L().Error("authentication server did not authorize the connection",
+				logFields := []helpers.IDetails{
 					helpers.Int("accessKey (length)", len(accessKey)),
 					helpers.String("account", account),
 					helpers.String("cluster", cluster),
 					helpers.String("connId", connectionId),
-					helpers.Int("statusCode", response.StatusCode))
+					helpers.Int("statusCode", response.StatusCode),
+				}
+				// Surface obviously-unconfigured credentials (unsubstituted Helm
+				// placeholders) so support can tell them apart from a genuine
+				// bad/revoked key without changing the 401 behavior itself.
+				if reason := unconfiguredCredentialsReason(account, accessKey); reason != "" {
+					logFields = append(logFields, helpers.String("reason", reason))
+				}
+				logger.L().Error("authentication server did not authorize the connection", logFields...)
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
