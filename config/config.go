@@ -34,6 +34,32 @@ type Backend struct {
 	KeepAliveTask        *KeepAliveTaskConfig        `mapstructure:"keepAliveTaskConfig"`
 	SkipAlertsFrom       []string                    `mapstructure:"skipAlertsFrom"`
 	FeaturesProvider     *FeaturesProviderConfig     `mapstructure:"featuresProvider"`
+	MessageQueue         *MessageQueueConfig         `mapstructure:"messageQueue"`
+}
+
+// MessageQueueConfig selects the message queue backend. When Type is set it
+// takes precedence over the legacy top-level PulsarConfig; when it is absent the
+// server falls back to PulsarConfig (see adapters/backend/v1/factory.go).
+type MessageQueueConfig struct {
+	Type        string       `mapstructure:"type"` // "kafka"
+	KafkaConfig *KafkaConfig `mapstructure:"kafkaConfig"`
+}
+
+type KafkaConfig struct {
+	BootstrapServers []string `mapstructure:"bootstrapServers"`
+	ProducerTopic    string   `mapstructure:"producerTopic"` // cluster -> backend (.out)
+	ConsumerTopic    string   `mapstructure:"consumerTopic"` // backend -> cluster (.in)
+	GroupIDPrefix    string   `mapstructure:"groupIdPrefix"`
+	CompressionType  string   `mapstructure:"compressionType"` // default "zstd"
+	MaxMessageBytes  int      `mapstructure:"maxMessageBytes"` // default 67108864 (64 MB)
+	// Security fields are parsed now but only PLAINTEXT is honored in this phase;
+	// SASL/TLS enforcement ships in the immediate follow-up.
+	SecurityProtocol string `mapstructure:"securityProtocol"` // PLAINTEXT, SSL, SASL_PLAINTEXT, SASL_SSL
+	SASLMechanism    string `mapstructure:"saslMechanism"`
+	SASLUsername     string `mapstructure:"saslUsername"`
+	SASLPassword     string `mapstructure:"saslPassword"`
+	TLSEnabled       bool   `mapstructure:"tlsEnabled"`
+	TLSCaCertPath    string `mapstructure:"tlsCaCertPath"`
 }
 
 type InCluster struct {
