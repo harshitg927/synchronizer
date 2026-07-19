@@ -20,6 +20,8 @@ func newFromConfig(cfg config.Config) (*messaging.Components, error) {
 		switch mq.Type {
 		case "kafka":
 			return newKafkaFromConfig(cfg)
+		case "pulsar":
+			return newPulsarFromConfig(cfg)
 		default:
 			return nil, fmt.Errorf("unknown message queue type %q", mq.Type)
 		}

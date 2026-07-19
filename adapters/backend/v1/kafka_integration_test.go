@@ -257,9 +257,10 @@ func TestKafkaMessageReader_DispatchesToAdapter(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(producer.Close)
 
-	// The reader starts at latest (at-most-once), so wait for it to join its group
-	// before producing, otherwise the message is delivered before the offset settles.
-	time.Sleep(5 * time.Second)
+	// The reader starts at latest (at-most-once), so wait for it to actually join
+	// its group before producing, otherwise the message is delivered before the
+	// offset settles and is missed.
+	waitForGroupsStable(t, ctx, broker, reader.GroupID())
 
 	payload, err := json.Marshal(messaging.PutObjectMessage{Kind: "/v1/configmaps", Name: "reader-test", Depth: 1})
 	require.NoError(t, err)
@@ -287,12 +288,14 @@ func TestKafkaMessageReader_FanOutAcrossGroups(t *testing.T) {
 	// each receive the full topic, replicating Pulsar Reader fan-out.
 	var wg sync.WaitGroup
 	received := make([]chan domain.KindName, 2)
+	groupIDs := make([]string, 0, len(received))
 	for i := range received {
 		received[i] = make(chan domain.KindName, 1)
 		cfg := kafkaTestConfig(broker, inTopic, inTopic)
 		reader, err := NewKafkaMessageReader(cfg)
 		require.NoError(t, err)
 		t.Cleanup(reader.Close)
+		groupIDs = append(groupIDs, reader.GroupID())
 
 		ch := received[i]
 		adapter := adapters.NewMockAdapter(false)
@@ -305,8 +308,8 @@ func TestKafkaMessageReader_FanOutAcrossGroups(t *testing.T) {
 		reader.Start(ctx, adapter)
 	}
 
-	// Give both readers time to join their groups before producing.
-	time.Sleep(5 * time.Second)
+	// Wait for both readers to join their (distinct) groups before producing.
+	waitForGroupsStable(t, ctx, broker, groupIDs...)
 
 	producer, err := NewKafkaMessageProducer(kafkaTestConfig(broker, inTopic, inTopic))
 	require.NoError(t, err)
@@ -330,6 +333,32 @@ func TestKafkaMessageReader_FanOutAcrossGroups(t *testing.T) {
 		}(received[i])
 	}
 	wg.Wait()
+}
+
+// waitForGroupsStable polls the broker until every given consumer group is in the
+// Stable state with at least one member, i.e. the reader(s) have joined and been
+// assigned partitions. This replaces a fixed sleep, which under-waits on slow CI.
+func waitForGroupsStable(t *testing.T, ctx context.Context, broker string, groupIDs ...string) {
+	t.Helper()
+
+	admClient, err := kgo.NewClient(kgo.SeedBrokers(broker))
+	require.NoError(t, err)
+	defer admClient.Close()
+	adm := kadm.NewClient(admClient)
+
+	require.Eventually(t, func() bool {
+		described, err := adm.DescribeGroups(ctx, groupIDs...)
+		if err != nil {
+			return false
+		}
+		for _, groupID := range groupIDs {
+			group, ok := described[groupID]
+			if !ok || group.State != "Stable" || len(group.Members) == 0 {
+				return false
+			}
+		}
+		return true
+	}, 30*time.Second, 500*time.Millisecond, "consumer groups did not become stable")
 }
 
 func pollOneRecord(t *testing.T, ctx context.Context, consumer *kgo.Client) *kgo.Record {

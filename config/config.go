@@ -47,8 +47,8 @@ type MessageQueueConfig struct {
 
 type KafkaConfig struct {
 	BootstrapServers []string `mapstructure:"bootstrapServers"`
-	ProducerTopic    string   `mapstructure:"producerTopic"` // cluster -> backend (.out)
-	ConsumerTopic    string   `mapstructure:"consumerTopic"` // backend -> cluster (.in)
+	ProducerTopic    string   `mapstructure:"producerTopic"` // server produces here; carries cluster -> backend traffic (.out), consumed by the event ingester
+	ConsumerTopic    string   `mapstructure:"consumerTopic"` // server consumes here; carries backend -> cluster traffic (.in), produced by backend services
 	GroupIDPrefix    string   `mapstructure:"groupIdPrefix"`
 	CompressionType  string   `mapstructure:"compressionType"` // default "zstd"
 	MaxMessageBytes  int      `mapstructure:"maxMessageBytes"` // default 67108864 (64 MB)

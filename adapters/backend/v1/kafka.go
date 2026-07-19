@@ -43,6 +43,15 @@ func newKafkaFromConfig(cfg config.Config) (*messaging.Components, error) {
 	if len(kafkaCfg.BootstrapServers) == 0 {
 		return nil, fmt.Errorf("kafkaConfig.bootstrapServers is required")
 	}
+	// An empty producer/consumer topic silently breaks production: kgo would set an
+	// empty DefaultProduceTopic and fail every record inside franz-go, invisible to
+	// callers because ProduceMessage produces async. Reject it up front instead.
+	if kafkaCfg.ProducerTopic == "" {
+		return nil, fmt.Errorf("kafkaConfig.producerTopic is required")
+	}
+	if kafkaCfg.ConsumerTopic == "" {
+		return nil, fmt.Errorf("kafkaConfig.consumerTopic is required")
+	}
 	// SASL/TLS is a follow-up; fail loudly rather than silently ignoring security config.
 	if protocol := strings.ToUpper(kafkaCfg.SecurityProtocol); protocol != "" && protocol != "PLAINTEXT" {
 		return nil, fmt.Errorf("kafkaConfig.securityProtocol %q is not yet supported (only PLAINTEXT); SASL/TLS ships in a follow-up", kafkaCfg.SecurityProtocol)
@@ -277,26 +286,35 @@ func NewKafkaMessageReader(cfg config.Config) (*KafkaMessageReader, error) {
 }
 
 func (c *KafkaMessageReader) Start(mainCtx context.Context, adapter adapters.Adapter) {
+	for w := 1; w <= c.workers; w++ {
+		logger.L().Info("starting to listening on kafka message channel", helpers.Int("worker", w))
+		c.wg.Add(1)
+		go c.listenOnMessageChannel(mainCtx, adapter)
+	}
+
 	go func() {
 		logger.L().Info("starting to read messages from kafka")
 		c.readerLoop(mainCtx)
-	}()
-
-	go func() {
-		for w := 1; w <= c.workers; w++ {
-			logger.L().Info("starting to listening on kafka message channel", helpers.Int("worker", w))
-			c.wg.Add(1)
-			go c.listenOnMessageChannel(mainCtx, adapter)
-		}
-
-		c.wg.Wait()
+		// readerLoop is the sole writer to messageChannel, so it owns closing it
+		// (standard Go channel-ownership pattern). Closing only after the loop has
+		// fully returned guarantees no concurrent send; closing from a separate
+		// goroutine while readerLoop might still be delivering a fetched batch could
+		// race into a send-on-closed-channel panic. Closing here also signals the
+		// workers to drain and exit via the !ok receive.
 		logger.L().Info("closing kafka message channel")
 		close(c.messageChannel)
+		c.wg.Wait()
+		logger.L().Info("kafka workers stopped")
 	}()
 }
 
 func (c *KafkaMessageReader) Close() {
 	c.client.Close()
+}
+
+// GroupID returns the unique per-pod consumer group id this reader joined.
+func (c *KafkaMessageReader) GroupID() string {
+	return c.name
 }
 
 func (c *KafkaMessageReader) readerLoop(ctx context.Context) {
