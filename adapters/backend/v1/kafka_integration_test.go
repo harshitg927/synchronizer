@@ -257,9 +257,8 @@ func TestKafkaMessageReader_DispatchesToAdapter(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(producer.Close)
 
-	// The reader starts at latest (at-most-once), so wait for it to actually join
-	// its group before producing, otherwise the message is delivered before the
-	// offset settles and is missed.
+	// The reader starts at latest, so wait for it to join its group before producing,
+	// otherwise the message lands before the offset settles and is missed.
 	waitForGroupsStable(t, ctx, broker, reader.GroupID())
 
 	payload, err := json.Marshal(messaging.PutObjectMessage{Kind: "/v1/configmaps", Name: "reader-test", Depth: 1})
@@ -335,9 +334,8 @@ func TestKafkaMessageReader_FanOutAcrossGroups(t *testing.T) {
 	wg.Wait()
 }
 
-// waitForGroupsStable polls the broker until every given consumer group is in the
-// Stable state with at least one member, i.e. the reader(s) have joined and been
-// assigned partitions. This replaces a fixed sleep, which under-waits on slow CI.
+// waitForGroupsStable polls until every given consumer group is Stable with at least
+// one member, i.e. the readers have joined and been assigned partitions.
 func waitForGroupsStable(t *testing.T, ctx context.Context, broker string, groupIDs ...string) {
 	t.Helper()
 
@@ -366,9 +364,8 @@ func pollOneRecord(t *testing.T, ctx context.Context, consumer *kgo.Client) *kgo
 	return pollRecords(t, ctx, consumer, 1)[0]
 }
 
-// pollRecords accumulates exactly n records across fetches. A single PollFetches
-// can return multiple records at once, so callers must not poll per-record (that
-// would silently drop the extras that share a fetch).
+// pollRecords accumulates exactly n records across fetches. A single PollFetches can
+// return multiple records, so polling per-record would drop the extras it shares a fetch with.
 func pollRecords(t *testing.T, ctx context.Context, consumer *kgo.Client, n int) []*kgo.Record {
 	t.Helper()
 	pollCtx, cancel := context.WithTimeout(ctx, 30*time.Second)

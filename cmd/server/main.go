@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gobwas/ws"
 	"github.com/kubescape/synchronizer/utils"
@@ -20,6 +24,10 @@ import (
 	"github.com/kubescape/synchronizer/core"
 	"github.com/kubescape/synchronizer/messaging"
 )
+
+// shutdownTimeout bounds how long the server waits for in-flight requests to
+// finish before the process exits and deferred cleanup runs.
+const shutdownTimeout = 30 * time.Second
 
 func main() {
 	ctx := context.Background()
@@ -74,8 +82,9 @@ func main() {
 	logger.L().Info("starting synchronizer server", helpers.String("port", addr), helpers.String("hostname", hostname))
 
 	// websocket server
-	_ = http.ListenAndServe(addr,
-		authentication.AuthenticationServerMiddleware(cfg.Backend.AuthenticationServer,
+	srv := &http.Server{
+		Addr: addr,
+		Handler: authentication.AuthenticationServerMiddleware(cfg.Backend.AuthenticationServer,
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				conn, _, _, err := ws.UpgradeHTTP(r, w)
 				if err != nil {
@@ -109,5 +118,24 @@ func main() {
 						return
 					}
 				}()
-			})))
+			})),
+	}
+
+	// Shut down on SIGTERM/SIGINT so the deferred cleanup runs, in particular closing
+	// the message queue, which flushes buffered producer records instead of dropping them.
+	go func() {
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-signals
+		logger.L().Info("shutting down synchronizer server", helpers.String("signal", sig.String()))
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer shutdownCancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			logger.L().Error("error during server shutdown", helpers.Error(err))
+		}
+	}()
+
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.L().Error("websocket server stopped unexpectedly", helpers.Error(err))
+	}
 }

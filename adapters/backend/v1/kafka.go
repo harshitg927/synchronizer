@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kubescape/go-logger"
 	"github.com/kubescape/go-logger/helpers"
@@ -20,21 +21,19 @@ const (
 	kafkaBackend = "kafka"
 
 	defaultKafkaGroupIDPrefix   = "synchronizer-server"
-	defaultKafkaCompressionType = "zstd"
-	defaultKafkaMaxMessageBytes = 64 * 1024 * 1024 // 64 MB, see proposal message-size section
+	defaultKafkaMaxMessageBytes = 64 * 1024 * 1024 // 64 MB
 	defaultKafkaConsumerWorkers = 10
 
-	// franz-go defaults BrokerMax{Write,Read}Bytes to 100 MB (Kafka's
-	// socket.request.max.bytes) and caps them at 1 GB. The per-message batch/fetch
-	// limit must not exceed the broker byte limit, so we raise the broker limit to
-	// match maxMessageBytes whenever it is configured above the default.
+	// kafkaProducerFlushTimeout bounds how long shutdown waits for buffered records.
+	kafkaProducerFlushTimeout = 30 * time.Second
+
+	// franz-go defaults BrokerMax{Write,Read}Bytes to Kafka's socket.request.max.bytes
+	// (100 MB) and rejects a broker limit below the batch/fetch limit; 1 GB is its cap.
 	kafkaDefaultBrokerBytes = 100 << 20
 	kafkaMaxBrokerBytes     = 1 << 30
 )
 
-// newKafkaFromConfig builds the Kafka producer and reader and wires them into
-// messaging.Components. It mirrors newPulsarFromConfig: on any construction error
-// it closes what was already created before returning.
+// newKafkaFromConfig creates the Kafka producer and reader from configuration.
 func newKafkaFromConfig(cfg config.Config) (*messaging.Components, error) {
 	kafkaCfg := cfg.Backend.MessageQueue.KafkaConfig
 	if kafkaCfg == nil {
@@ -43,18 +42,21 @@ func newKafkaFromConfig(cfg config.Config) (*messaging.Components, error) {
 	if len(kafkaCfg.BootstrapServers) == 0 {
 		return nil, fmt.Errorf("kafkaConfig.bootstrapServers is required")
 	}
-	// An empty producer/consumer topic silently breaks production: kgo would set an
-	// empty DefaultProduceTopic and fail every record inside franz-go, invisible to
-	// callers because ProduceMessage produces async. Reject it up front instead.
+	// An empty topic would fail every async produce inside franz-go, invisibly to callers.
 	if kafkaCfg.ProducerTopic == "" {
 		return nil, fmt.Errorf("kafkaConfig.producerTopic is required")
 	}
 	if kafkaCfg.ConsumerTopic == "" {
 		return nil, fmt.Errorf("kafkaConfig.consumerTopic is required")
 	}
-	// SASL/TLS is a follow-up; fail loudly rather than silently ignoring security config.
+	// SASL/TLS is not wired into the client yet, so reject any populated security
+	// setting rather than connecting in plaintext while the operator believes otherwise.
 	if protocol := strings.ToUpper(kafkaCfg.SecurityProtocol); protocol != "" && protocol != "PLAINTEXT" {
 		return nil, fmt.Errorf("kafkaConfig.securityProtocol %q is not yet supported (only PLAINTEXT); SASL/TLS ships in a follow-up", kafkaCfg.SecurityProtocol)
+	}
+	if kafkaCfg.TLSEnabled || kafkaCfg.TLSCaCertPath != "" ||
+		kafkaCfg.SASLMechanism != "" || kafkaCfg.SASLUsername != "" || kafkaCfg.SASLPassword != "" {
+		return nil, fmt.Errorf("kafkaConfig TLS/SASL settings are not yet enforced (only PLAINTEXT is supported); SASL/TLS ships in a follow-up")
 	}
 
 	logger.L().Info("initializing kafka client",
@@ -85,8 +87,8 @@ func newKafkaFromConfig(cfg config.Config) (*messaging.Components, error) {
 	}, nil
 }
 
-// kafkaCompressionCodec maps the configured compression name to a franz-go codec,
-// defaulting to ZSTD to match the Pulsar producer.
+// kafkaCompressionCodec maps the configured compression name to a franz-go codec.
+// It defaults to ZSTD to match the Pulsar producer.
 func kafkaCompressionCodec(compressionType string) kgo.CompressionCodec {
 	switch strings.ToLower(compressionType) {
 	case "none":
@@ -109,9 +111,17 @@ func kafkaMaxMessageBytes(cfg *config.KafkaConfig) int {
 	return defaultKafkaMaxMessageBytes
 }
 
-// kafkaBrokerByteLimit returns the BrokerMax{Write,Read}Bytes value to use so the
-// broker limit never sits below the configured per-message limit (which franz-go
-// rejects at construction). It is clamped to franz-go's [default, 1 GB] range.
+// kafkaRecordByteLimit returns the batch/fetch byte limit, clamped to avoid an
+// int32 overflow and to stay within the broker limit.
+func kafkaRecordByteLimit(maxMessageBytes int) int32 {
+	if maxMessageBytes > kafkaMaxBrokerBytes {
+		return kafkaMaxBrokerBytes
+	}
+	return int32(maxMessageBytes)
+}
+
+// kafkaBrokerByteLimit returns the BrokerMax{Write,Read}Bytes value, raised so the
+// broker limit never sits below the configured per-message limit.
 func kafkaBrokerByteLimit(maxMessageBytes int) int32 {
 	limit := maxMessageBytes
 	if limit < kafkaDefaultBrokerBytes {
@@ -141,7 +151,7 @@ func NewKafkaMessageProducer(cfg config.Config) (*KafkaMessageProducer, error) {
 		kgo.SeedBrokers(kafkaCfg.BootstrapServers...),
 		kgo.DefaultProduceTopic(kafkaCfg.ProducerTopic),
 		kgo.ProducerBatchCompression(kafkaCompressionCodec(kafkaCfg.CompressionType)),
-		kgo.ProducerBatchMaxBytes(int32(maxMessageBytes)),
+		kgo.ProducerBatchMaxBytes(kafkaRecordByteLimit(maxMessageBytes)),
 		kgo.BrokerMaxWriteBytes(kafkaBrokerByteLimit(maxMessageBytes)),
 	)
 	if err != nil {
@@ -173,12 +183,18 @@ func (p *KafkaMessageProducer) ProduceMessageWithoutIdentifier(ctx context.Conte
 }
 
 func (p *KafkaMessageProducer) Close() {
+	// franz-go's Close fails buffered records rather than flushing them, so flush
+	// first to avoid dropping in-flight messages on shutdown.
+	ctx, cancel := context.WithTimeout(context.Background(), kafkaProducerFlushTimeout)
+	defer cancel()
+	if err := p.client.Flush(ctx); err != nil {
+		logger.L().Error("failed to flush kafka producer before close", helpers.Error(err))
+	}
 	p.client.Close()
 }
 
-// kafkaPartitionKey returns the {account}/{cluster} partition key required on the
-// .out topic for per-cluster ordering. It returns nil when no identifier is set
-// (metadata messages produced via ProduceMessageWithoutIdentifier).
+// kafkaPartitionKey returns the {account}/{cluster} partition key that keeps a
+// cluster's events ordered. It returns nil when no identifier is set.
 func kafkaPartitionKey(account, cluster string) []byte {
 	if account == "" && cluster == "" {
 		return nil
@@ -187,8 +203,7 @@ func kafkaPartitionKey(account, cluster string) []byte {
 }
 
 // kafkaHeadersFromProperties converts the property map to Kafka record headers.
-// Values are UTF-8 encoded; empty values are omitted so consumers treat a missing
-// header as "not present" (see proposal header-serialization rules).
+// Values are UTF-8 encoded and empty values are omitted, not written as empty.
 func kafkaHeadersFromProperties(properties map[string]string) []kgo.RecordHeader {
 	headers := make([]kgo.RecordHeader, 0, len(properties))
 	for key, value := range properties {
@@ -255,8 +270,7 @@ func NewKafkaMessageReader(cfg config.Config) (*KafkaMessageReader, error) {
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
 	}
 	// A unique per-pod group.id replicates the Pulsar Reader fan-out: every pod
-	// consumes the full .in topic (never a shared/competing consumer group). The
-	// group starts at latest and never commits, so this is at-most-once by design.
+	// consumes the full topic, starting at latest and never committing (at-most-once).
 	groupID := fmt.Sprintf("%s-%s", groupIDPrefix, hostname)
 
 	client, err := kgo.NewClient(
@@ -265,7 +279,7 @@ func NewKafkaMessageReader(cfg config.Config) (*KafkaMessageReader, error) {
 		kgo.ConsumerGroup(groupID),
 		kgo.ConsumeResetOffset(kgo.NewOffset().AtEnd()),
 		kgo.DisableAutoCommit(),
-		kgo.FetchMaxBytes(int32(kafkaMaxMessageBytes(kafkaCfg))),
+		kgo.FetchMaxBytes(kafkaRecordByteLimit(kafkaMaxMessageBytes(kafkaCfg))),
 		kgo.BrokerMaxReadBytes(kafkaBrokerByteLimit(kafkaMaxMessageBytes(kafkaCfg))),
 	)
 	if err != nil {
@@ -295,12 +309,8 @@ func (c *KafkaMessageReader) Start(mainCtx context.Context, adapter adapters.Ada
 	go func() {
 		logger.L().Info("starting to read messages from kafka")
 		c.readerLoop(mainCtx)
-		// readerLoop is the sole writer to messageChannel, so it owns closing it
-		// (standard Go channel-ownership pattern). Closing only after the loop has
-		// fully returned guarantees no concurrent send; closing from a separate
-		// goroutine while readerLoop might still be delivering a fetched batch could
-		// race into a send-on-closed-channel panic. Closing here also signals the
-		// workers to drain and exit via the !ok receive.
+		// readerLoop is the sole writer, so it owns the close: closing it elsewhere
+		// could race a concurrent send. This also signals the workers to drain and exit.
 		logger.L().Info("closing kafka message channel")
 		close(c.messageChannel)
 		c.wg.Wait()
