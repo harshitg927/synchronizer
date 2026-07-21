@@ -16,6 +16,20 @@ func init() {
 }
 
 func newFromConfig(cfg config.Config) (*messaging.Components, error) {
+	if mq := cfg.Backend.MessageQueue; mq != nil && mq.Type != "" {
+		switch mq.Type {
+		case "kafka":
+			return newKafkaFromConfig(cfg)
+		case "pulsar":
+			return newPulsarFromConfig(cfg)
+		default:
+			return nil, fmt.Errorf("unknown message queue type %q", mq.Type)
+		}
+	}
+	return newPulsarFromConfig(cfg)
+}
+
+func newPulsarFromConfig(cfg config.Config) (*messaging.Components, error) {
 	if cfg.Backend.PulsarConfig == nil {
 		return nil, nil
 	}
