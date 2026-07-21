@@ -29,6 +29,10 @@ import (
 // finish before the process exits and deferred cleanup runs.
 const shutdownTimeout = 30 * time.Second
 
+// readHeaderTimeout bounds how long a client may take to send request headers.
+// Kept small and header-only so it does not affect established websocket connections.
+const readHeaderTimeout = 10 * time.Second
+
 func main() {
 	ctx := context.Background()
 
@@ -83,7 +87,8 @@ func main() {
 
 	// websocket server
 	srv := &http.Server{
-		Addr: addr,
+		Addr:              addr,
+		ReadHeaderTimeout: readHeaderTimeout,
 		Handler: authentication.AuthenticationServerMiddleware(cfg.Backend.AuthenticationServer,
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				conn, _, _, err := ws.UpgradeHTTP(r, w)
@@ -123,7 +128,9 @@ func main() {
 
 	// Shut down on SIGTERM/SIGINT so the deferred cleanup runs, in particular closing
 	// the message queue, which flushes buffered producer records instead of dropping them.
+	shutdownDone := make(chan struct{})
 	go func() {
+		defer close(shutdownDone)
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 		sig := <-signals
@@ -137,5 +144,8 @@ func main() {
 
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.L().Error("websocket server stopped unexpectedly", helpers.Error(err))
+		return
 	}
+
+	<-shutdownDone
 }
